@@ -1,8 +1,9 @@
 from typing import Sequence, Any
 
-from fastapi.exceptions import RequestErrorModel
-from pydantic import ValidationError
+from pydantic import ValidationError, create_model
 from pydantic.error_wrappers import ErrorList
+
+RequestErrorModel = create_model("Request")
 
 
 class RequestValidationError(ValidationError):

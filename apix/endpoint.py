@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from . import params
 from .dependencies.utils import get_dependant, request_params_to_args, request_body_to_args, get_body_field
-from .excetions import RequestValidationError
+from .exceptions import RequestValidationError
 from .utils import is_coroutine_callable, is_scalar_type
 
 AgnosticClient = Union[Client, AsyncClient]
