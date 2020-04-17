@@ -1,15 +1,18 @@
+import inspect
+from copy import deepcopy
 from typing import Callable, Dict, Any, Type, List, Optional, cast, Sequence, Mapping, Tuple
 
-from pydantic import BaseModel, MissingError, create_model
+from pydantic import BaseModel, MissingError, create_model  # noqa
 from pydantic.error_wrappers import ErrorWrapper
-from pydantic.fields import ModelField, FieldInfo, SHAPE_SINGLETON, SHAPE_LIST, SHAPE_SET, SHAPE_TUPLE, SHAPE_SEQUENCE, \
-    SHAPE_TUPLE_ELLIPSIS, Required
+from pydantic.fields import ModelField, FieldInfo, SHAPE_SINGLETON, SHAPE_LIST, SHAPE_SET, SHAPE_TUPLE, \
+    SHAPE_SEQUENCE, SHAPE_TUPLE_ELLIPSIS, Required
 from pydantic.schema import get_annotation_from_field_info
-from pydantic.typing import ForwardRef, evaluate_forwardref
+from pydantic.typing import ForwardRef, evaluate_forwardref  # noqa
 from pydantic.utils import lenient_issubclass
 
 from .models import Dependant
 from .. import params
+from ..encoder import jsonable_encoder
 from ..utils import get_path_param_names, create_response_field
 
 sequence_shapes = {
@@ -84,18 +87,11 @@ def get_dependant(
                 ignore_default=ignore_default,
             )
             add_param_to_fields(field=param_field, dependant=dependant)
-        elif is_scalar_field(field=param_field):
-            add_param_to_fields(field=param_field, dependant=dependant)
-        elif isinstance(
-                param.default, (params.Query, params.Header)
-        ) and is_scalar_sequence_field(param_field):
-            add_param_to_fields(field=param_field, dependant=dependant)
-        else:
-            field_info = get_field_info(param_field)
-            assert isinstance(
-                field_info, params.Body
-            ), f"Param: {param_field.name} can only be a request body, using Body(...)"
+        elif isinstance(param.default, params.Body):
             dependant.body_params.append(param_field)
+        else:
+            add_param_to_fields(field=param_field, dependant=dependant)
+
     return dependant
 
 
@@ -136,7 +132,7 @@ def get_param_field(
         ):
             field_info.in_ = default_field_info.in_
         if force_type:
-            field_info.in_ = force_type  # type: ignore
+            field_info.in_ = force_type  # noqa
     else:
         field_info = default_field_info(default_value)
     required = default_value == Required
@@ -168,7 +164,7 @@ def is_scalar_field(field: ModelField) -> bool:
     if not (
             field.shape == SHAPE_SINGLETON
             and not lenient_issubclass(field.type_, BaseModel)
-            and not lenient_issubclass(field.type_, sequence_types + (dict,))
+            and not lenient_issubclass(field.type_, sequence_types + (dict,))  # noqa
             and not isinstance(field_info, params.Body)
     ):
         return False
@@ -208,7 +204,7 @@ def request_params_to_args(
     values = {}
     errors = []
     for field in required_params:
-        value = received_params.get(field.alias)
+        value = received_params.get(field.name)
         field_info = get_field_info(field)
         assert isinstance(
             field_info, params.Param
@@ -221,7 +217,7 @@ def request_params_to_args(
                     )
                 )
             else:
-                values[field.name] = deepcopy(field.default)
+                values[field.alias] = deepcopy(field.default)
             continue
         v_, errors_ = field.validate(
             value, values, loc=(field_info.in_.value, field.alias)
@@ -231,7 +227,7 @@ def request_params_to_args(
         elif isinstance(errors_, list):
             errors.extend(errors_)
         else:
-            values[field.name] = v_
+            values[field.alias] = v_
     return values, errors
 
 
@@ -246,14 +242,15 @@ def request_body_to_args(
         field_info = get_field_info(field)
         embed = getattr(field_info, "embed", None)
         if len(required_params) == 1 and not embed:
-            received_body = {field.alias: received_body}
+            values = jsonable_encoder(received_body.get(field.name))
+            return values, errors
         for field in required_params:
             value: Any = None
             if received_body is not None:
                 try:
-                    value = received_body.get(field.alias)
+                    value = received_body.get(field.name)
                 except AttributeError:
-                    errors.append(get_missing_field_error(field.alias))
+                    errors.append(get_missing_field_error(field.name))
                     continue
 
             if (
@@ -264,18 +261,18 @@ def request_body_to_args(
                         and len(value) == 0)
             ):
                 if field.required:
-                    errors.append(get_missing_field_error(field.alias))
+                    errors.append(get_missing_field_error(field.name))
                 else:
-                    values[field.name] = deepcopy(field.default)
+                    values[field.alias] = deepcopy(field.default)
                 continue
-            v_, errors_ = field.validate(value, values, loc=("body", field.alias))
+            v_, errors_ = field.validate(value, values, loc=("body", field.name))
             if isinstance(errors_, ErrorWrapper):
                 errors.append(errors_)
             elif isinstance(errors_, list):
                 errors.extend(errors_)
             else:
-                values[field.name] = v_
-    return values, errors
+                values[field.alias] = v_
+    return jsonable_encoder(values), errors
 
 
 def get_body_field(*, dependant: Dependant, name: str) -> Optional[ModelField]:
@@ -293,22 +290,22 @@ def get_body_field(*, dependant: Dependant, name: str) -> Optional[ModelField]:
     for param in dependant.body_params:
         setattr(get_field_info(param), "embed", True)
     model_name = "Body_" + name
-    BodyModel = create_model(model_name)
+    BodyModel = create_model(model_name)  # noqa
     for f in dependant.body_params:
         BodyModel.__fields__[f.name] = f
     required = any(True for f in dependant.body_params if f.required)
 
-    BodyFieldInfo_kwargs: Dict[str, Any] = dict(default=None)
+    BodyFieldInfo_kwargs: Dict[str, Any] = dict(default=None)  # noqa
     if any(
             isinstance(get_field_info(f), params.File) for f in dependant.body_params
     ):
-        BodyFieldInfo: Type[params.Body] = params.File
+        BodyFieldInfo: Type[params.Body] = params.File  # noqa
     elif any(
             isinstance(get_field_info(f), params.Form) for f in dependant.body_params
     ):
-        BodyFieldInfo = params.Form
+        BodyFieldInfo = params.Form  # noqa
     else:
-        BodyFieldInfo = params.Body
+        BodyFieldInfo = params.Body  # noqa
 
         body_param_media_types = [
             getattr(get_field_info(f), "media_type")
