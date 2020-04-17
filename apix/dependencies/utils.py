@@ -40,10 +40,13 @@ def get_typed_annotation(param: inspect.Parameter, globalns: Dict[str, Any]) -> 
     return annotation
 
 
-def get_typed_signature(call: Callable) -> inspect.Signature:
+def get_typed_signature(call: Callable, is_method_or_classmethod=False) -> inspect.Signature:
     signature = inspect.signature(call)
 
     globalns = getattr(call, "__globals__", {})
+    raw_params = list(signature.parameters.values())
+    if is_method_or_classmethod:
+        raw_params = raw_params[1:]
     typed_params = [
         inspect.Parameter(
             name=param.name,
@@ -51,7 +54,7 @@ def get_typed_signature(call: Callable) -> inspect.Signature:
             default=param.default,
             annotation=get_typed_annotation(param, globalns),
         )
-        for param in signature.parameters.values()
+        for param in raw_params
     ]
     typed_signature = inspect.Signature(typed_params, return_annotation=signature.return_annotation)
     return typed_signature
@@ -62,9 +65,10 @@ def get_dependant(
         path: str,
         call: Callable,
         name: str = None,
+        is_method_or_classmethod=False
 ) -> Dependant:
     path_param_names = get_path_param_names(path)
-    endpoint_signature = get_typed_signature(call)
+    endpoint_signature = get_typed_signature(call, is_method_or_classmethod)
     signature_params = endpoint_signature.parameters
     dependant = Dependant(call=call, name=name, path=path, signature=endpoint_signature)
     for param_name, param in signature_params.items():
@@ -273,51 +277,3 @@ def request_body_to_args(
             else:
                 values[field.alias] = v_
     return jsonable_encoder(values), errors
-
-
-def get_body_field(*, dependant: Dependant, name: str) -> Optional[ModelField]:
-    if not dependant.body_params:
-        return None
-    first_param = dependant.body_params[0]
-    field_info = get_field_info(first_param)
-    embed = getattr(field_info, "embed", None)
-    body_param_names_set = set(param.name for param in dependant.body_params)
-    if len(body_param_names_set) == 1 and not embed:
-        return first_param
-    # If one field requires to embed, all have to be embedded
-    # in case a sub-dependency is evaluated with a single unique body field
-    # That is combined (embedded) with other body fields
-    for param in dependant.body_params:
-        setattr(get_field_info(param), "embed", True)
-    model_name = "Body_" + name
-    BodyModel = create_model(model_name)  # noqa
-    for f in dependant.body_params:
-        BodyModel.__fields__[f.name] = f
-    required = any(True for f in dependant.body_params if f.required)
-
-    BodyFieldInfo_kwargs: Dict[str, Any] = dict(default=None)  # noqa
-    if any(
-            isinstance(get_field_info(f), params.File) for f in dependant.body_params
-    ):
-        BodyFieldInfo: Type[params.Body] = params.File  # noqa
-    elif any(
-            isinstance(get_field_info(f), params.Form) for f in dependant.body_params
-    ):
-        BodyFieldInfo = params.Form  # noqa
-    else:
-        BodyFieldInfo = params.Body  # noqa
-
-        body_param_media_types = [
-            getattr(get_field_info(f), "media_type")
-            for f in dependant.body_params
-            if isinstance(get_field_info(f), params.Body)
-        ]
-        if len(set(body_param_media_types)) == 1:
-            BodyFieldInfo_kwargs["media_type"] = body_param_media_types[0]
-    return create_response_field(
-        name="body",
-        type_=BodyModel,
-        required=required,
-        alias="body",
-        field_info=BodyFieldInfo(**BodyFieldInfo_kwargs),
-    )
