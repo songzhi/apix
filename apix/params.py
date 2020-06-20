@@ -4,45 +4,45 @@ T = TypeVar('T', covariant=True)
 
 
 class _Param(str, Generic[T]):
-    _in: ClassVar[str]
+    __apix_param_type__: ClassVar[str]
 
     def __class_getitem__(cls, params):
         ty = Union[params]
-        ty.__param_type__ = cls._in
+        ty.__apix_param_type__ = cls.__apix_param_type__
         return ty
 
 
 class Query(_Param):
-    _in = 'Query'
+    __apix_param_type__ = 'Query'
 
 
 class Header(_Param):
-    _in = 'Header'
+    __apix_param_type__ = 'Header'
 
 
 class Path(_Param):
-    _in = 'Path'
+    __apix_param_type__ = 'Path'
 
 
 class Cookie(_Param):
-    _in = 'Cookie'
+    __apix_param_type__ = 'Cookie'
 
 
 class _Body(Dict[str, Any], Generic[T]):
-    _in: ClassVar[str]
+    __apix_param_type__: ClassVar[str]
 
     def __class_getitem__(cls, params):
         ty = Union[params]
-        ty.__param_type__ = cls._in
+        ty.__apix_param_type__ = cls.__apix_param_type__
         return ty
 
 
 class Body(_Body):
-    _in = 'Body'
+    __apix_param_type__ = 'Body'
 
 
 class Form(_Body):
-    _in = 'Form'
+    __apix_param_type__ = 'Form'
 
 
 __all__ = ['Query', 'Header', 'Path', 'Cookie', 'Body', 'Form']
