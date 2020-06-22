@@ -1,8 +1,10 @@
 import inspect
 from collections import defaultdict
-from typing import Dict, Any, Callable, Type, List, DefaultDict
+from typing import Dict, Any, Callable, Type, List, DefaultDict, Tuple, Mapping
 
-from .utils import get_path_param_names, is_scalar_type, get_param_type
+import typic
+
+from .utils import get_path_param_names, is_scalar_type, get_param_type, flatten_args
 
 try:
     from typing import ForwardRef  # noqa
@@ -57,6 +59,17 @@ def get_typed_signature(
     return typed_signature
 
 
+def merged_body(params: List[str], bound_args: Dict[str, Any]) -> Dict[str, Any]:
+    body = {}
+    for param in params:
+        arg = typic.primitive(bound_args[param])
+        if isinstance(arg, Mapping):
+            body.update(arg)
+        else:
+            body[param] = arg
+    return body
+
+
 class Dependant:
     def __init__(
             self,
@@ -80,6 +93,16 @@ class Dependant:
             return False
         self.params_map[param_type].append(param_name)
         return True
+
+    def bind(self, args: Tuple[..., Any], kwargs: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        bound_args = self.signature.bind(*args, **kwargs).arguments
+        return {
+            param_type: {
+                p: dict(flatten_args(typic.primitive(bound_args[p])))
+                for p in params
+            } if param_type not in ('Body', 'Form') else merged_body(params, bound_args)
+            for param_type, params in self.params_map.items()
+        }
 
 
 def get_dependant(
