@@ -1,8 +1,11 @@
-## Typed HTTP Client for Humans
+## [WIP] Typed HTTP Client for Humans
 It's inspired by [FastAPI](https://fastapi.tiangolo.com/) and 
 based on [pydantic](https://pydantic-docs.helpmanual.io/) and 
 [httpx](https://www.python-httpx.org/).
-It's currently a very rough demo for experiment.
+
+**It's currently a very rough demo for experiment.**
+Pydantic will be replaced by [typical](https://github.com/seandstewart/typical).
+this project is currently waiting for new type Union operator in Python3.10.
  
 ## Example
 ```python
