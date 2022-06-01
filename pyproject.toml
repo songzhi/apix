@@ -6,7 +6,7 @@ authors = ["lsongzhi <lsongzhi@163.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.7"
-httpx = "^0.13.3"
+httpx = ">=0.13.3,<0.24.0"
 multidict = "^4.7.5"
 
 [tool.poetry.dev-dependencies]
